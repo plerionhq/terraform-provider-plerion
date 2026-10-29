@@ -7,20 +7,33 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   goreleaser:
+    name: Build, sign and publish
     runs-on: ubuntu-latest
+    # The signing key is only available in this environment, which accepts
+    # release tags only and waits for an approval before the job runs.
+    environment: release
+    permissions:
+      contents: write # create the GitHub release and upload its files
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Never restore a cache in the job that signs: another workflow could
+          # have written it.
+          cache: false
 
       - name: Import the signing key
         id: import_gpg
@@ -31,7 +44,7 @@ jobs:
 
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
-          version: "~> v2"
+          version: v2.19.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

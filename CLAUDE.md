@@ -13,6 +13,7 @@ Terraform provider (`plerionhq/plerion`) for the Plerion customer API. It manage
 - **Creating a check runs it for real.** Plerion runs a new or changed check against every matching integration straight away. Test policies, in both the provider tests and `tests/terragrunt`, must never report an asset.
 - **`docs/` is generated.** Edit schema descriptions, `templates/` or `examples/`, then run `make docs`. `make lint` fails when `docs/` is out of date.
 - **The HTTP client's timeout reports `context.DeadlineExceeded`.** `shouldRetry` and the dry-run timeout message check the caller's context instead, or a slow response looks like the caller giving up.
+- **Releases need an approval.** The signing key is a secret of the `release` environment, which only `v*` tags can use and which waits for a reviewer before the job runs. Don't move the key back to a repository secret: every workflow on every branch could read it.
 - **`internal/fakeapi` mirrors the real API.** When the API changes behavior, change the fake in the same pull request, or the provider tests keep passing against behavior that no longer exists.
 
 ## Docs
