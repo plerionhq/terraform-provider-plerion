@@ -117,10 +117,11 @@ Add an entry to [`CHANGELOG.md`](CHANGELOG.md) under the unreleased version in t
 Releases are built by GoReleaser from a version tag and signed with the Plerion GPG key, which the Terraform Registry requires.
 
 1. Move the unreleased changelog entries under the new version number and today's date.
-2. Tag the commit on `main`, for example `git tag v0.1.0`, and push the tag.
-3. The `release` workflow builds the binaries, signs the checksums and creates a GitHub release. The Terraform Registry picks up the release from there.
+2. Tag the commit on `main`, for example `git tag v0.2.0`, and push the tag.
+3. Approve the waiting `release` deployment in the workflow run. The signing key lives in the `release` environment, which only version tags can use and which needs an approval before the job starts.
+4. The workflow builds the binaries, signs the checksums and creates a GitHub release. The Terraform Registry picks up the release from there.
 
-The first release needs a one-time setup: the repository must be public and named `terraform-provider-plerion`, and the provider must be published from the registry's **Publish** page with the public half of the signing key added to the `plerionhq` namespace. The release workflow reads the private key from the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets.
+The private signing key and its passphrase are the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets of the `release` environment. A copy of both is kept in 1Password.
 
 ## License
 
