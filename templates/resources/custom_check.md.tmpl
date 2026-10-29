@@ -1,0 +1,68 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Custom checks"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example usage
+
+{{ tffile "examples/resources/plerion_custom_check/resource.tf" }}
+
+The policy file, `policies/github-oidc-roles.rego`:
+
+{{ codefile "rego" "examples/resources/plerion_custom_check/policies/github-oidc-roles.rego" }}
+
+## Writing the policy
+
+A policy must declare `package custom` and define a rule named `result`. Plerion evaluates the rule and reads its value as a list of verdicts, one for each asset you want to report on.
+
+### What the policy receives
+
+| Field | Contents |
+| --- | --- |
+| `input.assets` | The assets of the `target` asset type. With `scope = "batch"`, this is one chunk of those assets. With `scope = "all"`, it is every asset of the type. Each asset has an `id`, and the configuration Plerion collected from the cloud provider is under `data`. |
+| `input.additionalAssets` | An object keyed by asset type that holds every asset of each type listed in `additional_assets`, for example `input.additionalAssets["AWS::IAM::Role"]`. |
+| `input.context` | The `tenantId`, `organizationId` and `integrationId` the check is running for. |
+
+### What the policy returns
+
+Each verdict in `result` is an object with these fields.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `id` | Yes | The `id` of an asset in `input.assets`. |
+| `status` | Yes | `FAILED` or `PASSED`. |
+| `severityLevel` | No | Replaces `defaults.severity_level` for this finding. |
+| `message` | No | Replaces `defaults.message` for this finding. |
+| `informational` | No | Replaces `defaults.informational` for this finding. |
+| `remediation` | No | Replaces `defaults.remediation` for this finding. Used on failed findings only. |
+| `meta` | No | An object merged over `defaults.meta` for this finding. |
+
+Every verdict becomes a finding, so an asset left out of `result` has no finding at all. Return a `PASSED` verdict for an asset when you want it to show as passed.
+
+If any verdict has another `status`, or names an asset that is not in `input.assets`, Plerion rejects the whole evaluation.
+
+Preview a policy before you apply it with the [`plerion_custom_check_dry_run`](../data-sources/custom_check_dry_run.md) data source.
+
+## When checks run
+
+Plerion runs a check after each scan of your integrations. It also runs a check straight after the check is created or changed, so a change you apply shows up in findings without waiting for the next scan.
+
+A check only runs against integrations from the cloud provider its `target` asset type belongs to. For example, a check on `AWS::IAM::Role` runs against your AWS integrations only.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import a custom check by its ID or by its slug. With an `import` block:
+
+{{ tffile "examples/resources/plerion_custom_check/import-by-string-id.tf" }}
+
+With the `terraform import` command:
+
+{{ codefile "shell" "examples/resources/plerion_custom_check/import.sh" }}

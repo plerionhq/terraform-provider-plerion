@@ -1,0 +1,18 @@
+# Build output
+/terraform-provider-plerion
+/dist/
+
+# Terraform and Terragrunt working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+.terragrunt-cache/
+tests/terragrunt/.logs/
+
+# Local settings
+.env
+*.key
+.DS_Store
+.idea/
+.vscode/

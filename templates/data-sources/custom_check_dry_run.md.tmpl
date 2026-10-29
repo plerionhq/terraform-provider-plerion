@@ -1,0 +1,28 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "Custom checks"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example usage
+
+{{ tffile "examples/data-sources/plerion_custom_check_dry_run/data-source.tf" }}
+
+## Check a policy before Terraform applies it
+
+Terraform reads a data source during the plan only when nothing the data source refers to is waiting to change. If the dry run refers to a `plerion_custom_check` resource that has changes, Terraform waits until the apply to read it, which is after the check has already changed.
+
+To preview a change during the plan, keep the check's settings in `locals` and give the same values to the resource and to the dry run. A `precondition` on the resource then stops the apply when the preview is not what you expect.
+
+{{ tffile "examples/data-sources/plerion_custom_check_dry_run/gate.tf" }}
+
+## Which assets a dry run sees
+
+A dry run evaluates the assets Plerion collected in its most recent scan of the integration. An integration that has not been scanned yet has no assets, so the dry run succeeds with no findings.
+
+{{ .SchemaMarkdown | trimspace }}

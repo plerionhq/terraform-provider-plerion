@@ -1,0 +1,46 @@
+name: End-to-end tests
+
+# Runs tests/terragrunt against a test tenant on demand. It creates and
+# deletes real custom checks, so it is not part of the pull request checks.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e
+
+env:
+  TERRAGRUNT_VERSION: v1.1.6
+
+jobs:
+  terragrunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The wrapper rewrites Terraform's output and exit codes, which the suite reads.
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Install Terragrunt
+        run: |
+          base="https://github.com/gruntwork-io/terragrunt/releases/download/${TERRAGRUNT_VERSION}"
+          curl -sSfL -o terragrunt_linux_amd64 "$base/terragrunt_linux_amd64"
+          curl -sSfL -o SHA256SUMS "$base/SHA256SUMS"
+          grep ' terragrunt_linux_amd64$' SHA256SUMS | sha256sum --check
+          sudo install -m 0755 terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          rm terragrunt_linux_amd64 SHA256SUMS
+
+      - name: Run the suite
+        run: tests/terragrunt/run.sh
+        env:
+          PLERION_API_URL: ${{ vars.PLERION_E2E_API_URL }}
+          PLERION_API_KEY: ${{ secrets.PLERION_E2E_API_KEY }}
