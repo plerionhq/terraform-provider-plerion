@@ -1,3 +1,27 @@
+## 0.2.0 (Unreleased)
+
+FEATURES:
+
+* **New resource:** `plerion_aws_integration` connects an AWS account to Plerion. Plerion assumes the role you give it, with your tenant's external ID, before it saves anything. Import an integration by its ID.
+* **New resource:** `plerion_aws_service_account` sets up an AWS account to run Plerion's workload scanners in. Import it by its AWS account ID.
+* **New resource:** `plerion_aws_service_account_region` sets the network a service account's scanners use in one AWS region. Plerion checks that the VPC is tagged with your tenant ID and that the subnet, security group and queue belong to it. Import it by `<account ID>/<region>`.
+* **New data source:** `plerion_tenant` reads your tenant ID and the external ID your IAM roles trust Plerion with.
+
+ENHANCEMENTS:
+
+* `api_url` and `PLERION_API_URL` accept the host on its own, such as `au.api.plerion.com`, and read it as https. Plerion's API examples set `PLERION_API_URL` that way.
+
+BUG FIXES:
+
+* An error that passes on Plerion's own message no longer ends in two full stops.
+
+NOTES:
+
+* An account from an AWS organization your tenant hasn't connected before is held until someone approves it in the Plerion console. `terraform apply` doesn't wait: the resource is created with `status = "pending_approval"` and Terraform prints a warning.
+* A role created in the same apply can take a minute or two before AWS lets Plerion assume it. The provider retries for up to two minutes.
+* Turning a service account or a region on and off stays in the Plerion console, so `enabled` is read-only.
+* `terraform destroy` removes integrations, service accounts and regions from Plerion.
+
 ## 0.1.0 (October 29, 2026)
 
 FEATURES:

@@ -1,0 +1,1 @@
+terraform import plerion_aws_service_account.this 123456789012

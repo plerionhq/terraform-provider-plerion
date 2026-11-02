@@ -1,0 +1,16 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "AWS onboarding"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example usage
+
+{{ tffile "examples/data-sources/plerion_tenant/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,6 +1,6 @@
 # Terraform provider for Plerion
 
-The Plerion provider manages [Plerion](https://www.plerion.com) resources through the Plerion customer API. It covers custom checks: create, update, import and delete rego checks, look them up, and preview their findings with a dry run before applying a change.
+The Plerion provider manages [Plerion](https://www.plerion.com) resources through the Plerion customer API. It covers custom checks: create, update, import and delete rego checks, look them up, and preview their findings with a dry run before applying a change. It also connects AWS accounts and sets up the service accounts Plerion's workload scanners run in.
 
 User documentation lives in [`docs/`](docs/) and is published to the Terraform Registry. Start with [`docs/index.md`](docs/index.md).
 
@@ -76,8 +76,8 @@ provider_installation {
 | Path | Contents |
 | --- | --- |
 | `internal/client` | The HTTP client for the Plerion customer API: authentication, retries and error parsing. |
-| `internal/provider` | The provider, the `plerion_custom_check` resource and the data sources. |
-| `internal/fakeapi` | An in-memory copy of the custom checks API that the provider tests run against. |
+| `internal/provider` | The provider, its resources and its data sources. |
+| `internal/fakeapi` | An in-memory copy of the custom check, tenant and AWS onboarding routes that the provider tests run against. |
 | `examples/`, `templates/` | The examples and page templates the documentation is generated from. |
 | `docs/` | Generated documentation. Do not edit it by hand. |
 | `tests/terragrunt` | The end-to-end suite that runs against a real Plerion API. |
@@ -86,9 +86,9 @@ provider_installation {
 
 There are two suites.
 
-**Unit and provider tests** run with `make test` and need no credentials. The provider tests drive the real Terraform CLI against `internal/fakeapi`, which copies the API behavior the provider depends on: full replacement on update, unique slugs, and metadata returned with its keys in a different order. When the real API changes, change the fake API in the same pull request.
+**Unit and provider tests** run with `make test` and need no credentials. The provider tests drive the real Terraform CLI against `internal/fakeapi`, which copies the API behavior the provider depends on: for custom checks, full replacement on update, unique slugs, and metadata returned with its keys in a different order; for AWS onboarding, approval holds, roles that can't be assumed yet, and integrations removed in the background. When the real API changes, change the fake API in the same pull request.
 
-**End-to-end tests** run the provider against a real Plerion API through Terragrunt. They create checks, check that a second plan shows no changes, update them, repair changes made outside Terraform, import by slug, test a slug conflict and destroy everything. See [`tests/terragrunt/README.md`](tests/terragrunt/README.md).
+**End-to-end tests** run the provider against a real Plerion API through Terragrunt. They cover custom checks only. They create checks, check that a second plan shows no changes, update them, repair changes made outside Terraform, import by slug, test a slug conflict and destroy everything. See [`tests/terragrunt/README.md`](tests/terragrunt/README.md).
 
 ```sh
 PLERION_API_URL=https://<api-address-of-your-test-tenant> \

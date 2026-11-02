@@ -1,8 +1,9 @@
-// Package fakeapi is an in-memory stand-in for the Plerion custom checks API,
-// used by the provider's tests. It copies the behavior of the real API that
-// the provider depends on: full replacement on update, no version bump on a
-// no-op update, unique slugs, and metadata returned with its keys reordered
-// and its numbers rewritten as 64-bit floats.
+// Package fakeapi is an in-memory stand-in for the Plerion customer API, used
+// by the provider's tests. For custom checks it copies the behavior of the
+// real API that the provider depends on: full replacement on update, no
+// version bump on a no-op update, unique slugs, and metadata returned with its
+// keys reordered and its numbers rewritten as 64-bit floats. The tenant and
+// AWS onboarding routes are in aws_onboarding.go.
 package fakeapi
 
 import (
@@ -24,8 +25,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// APIKey is the only key the fake accepts.
-const APIKey = "test-api-key"
+// The keys the fake accepts. APIKey may do anything. ReadOnlyAPIKey stands in
+// for a key whose role can only read: every change is refused, and so is the
+// external id, which needs permission to modify integrations.
+const (
+	APIKey         = "test-api-key"
+	ReadOnlyAPIKey = "read-only-api-key"
+)
 
 const (
 	organizationID = "00000000-0000-4000-8000-00000000000a"
@@ -117,6 +123,7 @@ type Server struct {
 	dryRunOutcome  DryRunOutcome
 	requestCounter map[string]int
 	clock          time.Time
+	aws            awsState
 }
 
 // New starts a fake API and stops it when the test ends.
@@ -127,6 +134,7 @@ func New(t *testing.T) *Server {
 		dryRuns:        map[string]*dryRun{},
 		requestCounter: map[string]int{},
 		clock:          time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		aws:            newAWSState(),
 		dryRunOutcome: DryRunOutcome{
 			Status:          "SUCCEEDED",
 			PollsBeforeDone: 1,
@@ -214,12 +222,22 @@ func (s *Server) handle(response http.ResponseWriter, request *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if request.Header.Get("Authorization") != "Bearer "+APIKey {
+	switch request.Header.Get("Authorization") {
+	case "Bearer " + APIKey:
+	case "Bearer " + ReadOnlyAPIKey:
+		if request.Method != http.MethodGet || request.URL.Path == "/v1/tenant/external-id" {
+			writeJSON(response, http.StatusForbidden, map[string]any{"message": "Forbidden"})
+			return
+		}
+	default:
 		writeJSON(response, http.StatusUnauthorized, map[string]any{"message": "Unauthorized"})
 		return
 	}
 
 	segments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if s.handleAWSOnboarding(response, request, segments) {
+		return
+	}
 	if len(segments) < 3 || segments[0] != "v1" || segments[1] != "tenant" {
 		writeJSON(response, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return
