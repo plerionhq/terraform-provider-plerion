@@ -1,0 +1,1 @@
+terraform import plerion_aws_service_account_region.sydney 123456789012/ap-southeast-2

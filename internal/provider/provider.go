@@ -61,6 +61,7 @@ func (p *plerionProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 			},
 			"api_url": schema.StringAttribute{
 				MarkdownDescription: "The Plerion API address for your region, for example `https://us1.api.plerion.com`. " +
+					"The host alone, such as `us1.api.plerion.com`, is read as https. " +
 					"Can also be set with the `" + apiURLEnvVar + "` environment variable. Defaults to `" + DefaultAPIURL + "`.",
 				Optional: true,
 			},
@@ -121,6 +122,9 @@ func (p *plerionProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *plerionProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCustomCheckResource,
+		NewAWSIntegrationResource,
+		NewAWSServiceAccountResource,
+		NewAWSServiceAccountRegionResource,
 	}
 }
 
@@ -129,6 +133,7 @@ func (p *plerionProvider) DataSources(_ context.Context) []func() datasource.Dat
 		NewCustomCheckDataSource,
 		NewCustomChecksDataSource,
 		NewCustomCheckDryRunDataSource,
+		NewTenantDataSource,
 	}
 }
 

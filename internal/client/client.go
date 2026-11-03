@@ -94,9 +94,14 @@ func New(cfg Config) (*Client, error) {
 
 // ParseBaseURL checks that rawURL is an absolute HTTPS URL with no path, query
 // or fragment. Plain HTTP is accepted for loopback hosts so tests can run
-// against a local server.
+// against a local server. A bare host is read as https, because Plerion's API
+// examples set PLERION_API_URL to the host alone.
 func ParseBaseURL(rawURL string) (*url.URL, error) {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed != "" && !strings.Contains(trimmed, "://") {
+		trimmed = "https://" + trimmed
+	}
+	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed.Host == "" {
 		return nil, fmt.Errorf("%q is not a valid URL. Use the full API address, for example https://au.api.plerion.com", rawURL)
 	}
@@ -206,6 +211,21 @@ func hasStatus(err error, status int) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == status
 }
 
+// HasCode reports whether err is an API error carrying the given error code,
+// such as RoleNotAssumable.
+func HasCode(err error, code string) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	for _, fieldError := range apiErr.Errors {
+		if fieldError.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
 // do sends one API request, retrying where it is safe to, and decodes a JSON
 // response into out when out is not nil.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
@@ -266,6 +286,28 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		case <-timer.C:
 		}
 	}
+}
+
+// doData is do for routes that wrap their answer in a data field, as the
+// tenant and AWS onboarding routes do. The custom check routes don't.
+func (c *Client) doData(ctx context.Context, method, path string, body, out any) error {
+	if out == nil {
+		return c.do(ctx, method, path, nil, body, nil)
+	}
+
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := c.do(ctx, method, path, nil, body, &envelope); err != nil {
+		return err
+	}
+	if len(envelope.Data) == 0 {
+		return fmt.Errorf("the response from %s %s has no data", method, path)
+	}
+	if err := json.Unmarshal(envelope.Data, out); err != nil {
+		return fmt.Errorf("decoding the response from %s %s: %w", method, path, err)
+	}
+	return nil
 }
 
 func (c *Client) send(ctx context.Context, method, endpoint string, payload []byte) ([]byte, int, http.Header, error) {
