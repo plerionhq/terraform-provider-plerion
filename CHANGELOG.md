@@ -20,7 +20,7 @@ NOTES:
 * An account from an AWS organization your tenant hasn't connected before is held until someone approves it in the Plerion console. `terraform apply` doesn't wait: the resource is created with `status = "pending_approval"` and Terraform prints a warning.
 * Plerion only assumes roles tagged `RolePurpose = PlerionAccess`, for both `plerion_aws_integration` and `plerion_aws_service_account`.
 * A role created in the same apply can take a minute or two before AWS lets Plerion assume it. The provider retries for up to two minutes.
-* Leaving `environment_id` out keeps the integration's environment, including one chosen in the Plerion console.
+* Leaving `environment_id` out keeps the integration's environment, including one chosen in the Plerion console. Setting or changing it also needs `AssetGroup:Modify` on the API key's role, because it changes the environment's asset group.
 * Turning a service account or a region on and off stays in the Plerion console, so `enabled` is read-only.
 * `terraform destroy` removes integrations, service accounts and regions from Plerion.
 

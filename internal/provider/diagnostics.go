@@ -10,9 +10,12 @@ import (
 )
 
 // Roles the AWS onboarding calls need, completing "Give the key ...". Modify
-// includes read, so one permission covers every call of a resource.
+// includes read, so one permission covers every call of a resource, except
+// that setting an environment also changes that environment's asset group.
 const (
-	roleForIntegrations    = "a role that can modify integrations (Integration:Modify)"
+	roleForIntegrations            = "a role that can modify integrations (Integration:Modify)"
+	roleForIntegrationEnvironments = "a role that can modify integrations and asset groups " +
+		"(Integration:Modify and AssetGroup:Modify)"
 	roleForServiceAccounts = "a role that can modify service accounts (ServiceAccount:Modify)"
 )
 

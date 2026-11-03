@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -28,9 +29,12 @@ import (
 // The keys the fake accepts. APIKey may do anything. ReadOnlyAPIKey stands in
 // for a key whose role can only read: every change is refused, and so is the
 // external id, which needs permission to modify integrations.
+// IntegrationOnlyAPIKey may modify integrations but not asset groups, so an
+// AWS integration write that names an environment is refused.
 const (
-	APIKey         = "test-api-key"
-	ReadOnlyAPIKey = "read-only-api-key"
+	APIKey                = "test-api-key"
+	ReadOnlyAPIKey        = "read-only-api-key"
+	IntegrationOnlyAPIKey = "integration-only-api-key"
 )
 
 const (
@@ -218,6 +222,26 @@ func (s *Server) Requests(route string) int {
 	return s.requestCounter[route]
 }
 
+// namesEnvironment reports whether an AWS integration write sends
+// environmentId, null included. The body is put back for the handler.
+func namesEnvironment(request *http.Request) bool {
+	if request.Method == http.MethodGet || request.Body == nil ||
+		!strings.HasPrefix(request.URL.Path, "/v1/tenant/integrations/aws") {
+		return false
+	}
+	body, err := io.ReadAll(request.Body)
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return false
+	}
+	_, ok := fields["environmentId"]
+	return ok
+}
+
 func (s *Server) handle(response http.ResponseWriter, request *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -227,6 +251,14 @@ func (s *Server) handle(response http.ResponseWriter, request *http.Request) {
 	case "Bearer " + ReadOnlyAPIKey:
 		if request.Method != http.MethodGet || request.URL.Path == "/v1/tenant/external-id" {
 			writeJSON(response, http.StatusForbidden, map[string]any{"message": "Forbidden"})
+			return
+		}
+	case "Bearer " + IntegrationOnlyAPIKey:
+		if namesEnvironment(request) {
+			writeErrors(response, http.StatusForbidden, map[string]any{
+				"code":    "ActionNotGranted",
+				"message": "Setting environmentId also needs AssetGroup:Modify, because it changes the environment's asset group.",
+			})
 			return
 		}
 	default:

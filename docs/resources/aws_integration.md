@@ -69,7 +69,7 @@ AWS can take a minute or two before it lets Plerion assume a role created in the
 
 ### Optional
 
-- `environment_id` (String) Plerion environment to put the account in. Left out, the integration keeps the environment it has, including one chosen in the Plerion console.
+- `environment_id` (String) Plerion environment to put the account in. Left out, the integration keeps the environment it has, including one chosen in the Plerion console. Setting or changing it changes the environment's asset group, so the API key's role also needs `AssetGroup:Modify`.
 - `instance_profile_arn` (String) Instance profile for workload scanning in the same account. Must be in the same account as `role_arn`, with no IAM path and only letters, digits, `-` and `_` in its name.
 - `kms_key_access_mode` (String) Which KMS keys workload scanning may use: `ALL_KEYS` or `SELECTED_KEYS`.
 - `name` (String) Display name. Defaults to the account alias, or the account id when it has none.

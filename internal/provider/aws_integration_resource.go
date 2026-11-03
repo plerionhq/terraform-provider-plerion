@@ -88,7 +88,8 @@ func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 			},
 			"environment_id": schema.StringAttribute{
 				MarkdownDescription: "Plerion environment to put the account in. Left out, the integration keeps " +
-					"the environment it has, including one chosen in the Plerion console.",
+					"the environment it has, including one chosen in the Plerion console. Setting or changing it " +
+					"changes the environment's asset group, so the API key's role also needs `AssetGroup:Modify`.",
 				Optional:      true,
 				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
@@ -175,7 +176,11 @@ func (r *awsIntegrationResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	if err != nil {
-		addAPIErrorWithRole(&resp.Diagnostics, "connect the AWS account", roleForIntegrations, err)
+		role := roleForIntegrations
+		if in.EnvironmentID != "" {
+			role = roleForIntegrationEnvironments
+		}
+		addAPIErrorWithRole(&resp.Diagnostics, "connect the AWS account", role, err)
 		return
 	}
 
@@ -236,7 +241,11 @@ func (r *awsIntegrationResource) Update(ctx context.Context, req resource.Update
 		})
 	}
 	if err != nil {
-		addAPIErrorWithRole(&resp.Diagnostics, "update the AWS integration", roleForIntegrations, err)
+		role := roleForIntegrations
+		if _, ok := changes["environmentId"]; ok {
+			role = roleForIntegrationEnvironments
+		}
+		addAPIErrorWithRole(&resp.Diagnostics, "update the AWS integration", role, err)
 		return
 	}
 

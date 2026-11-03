@@ -266,6 +266,39 @@ resource "plerion_aws_service_account" "test" {
 	})
 }
 
+// An environment changes that environment's asset group, so a key that can
+// modify integrations but not asset groups is told to add AssetGroup:Modify.
+func TestEnvironmentNeedsAssetGroupPermission(t *testing.T) {
+	server := newTestServer(t)
+	integration := func(extra string) string {
+		return providerConfigWithKey(server, fakeapi.IntegrationOnlyAPIKey) + `
+resource "plerion_aws_integration" "test" {
+  role_arn = "arn:aws:iam::111111111111:role/PlerionRole"
+` + extra + `
+}`
+	}
+	needsAssetGroups := regexp.MustCompile(
+		`(?s)does not have permission.*Integration:Modify\s+and\s+AssetGroup:Modify`)
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      integration(`  environment_id = "env-1"`),
+				ExpectError: needsAssetGroups,
+			},
+			{
+				// The same key connects the account without an environment.
+				Config: integration(""),
+			},
+			{
+				Config:      integration(`  environment_id = "env-1"`),
+				ExpectError: needsAssetGroups,
+			},
+		},
+	})
+}
+
 func TestARNsMustShareAnAccount(t *testing.T) {
 	server := newTestServer(t)
 
