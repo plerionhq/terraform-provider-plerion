@@ -16,9 +16,6 @@ resource "aws_iam_role" "plerion" {
       Condition = { StringEquals = { "sts:ExternalId" = data.plerion_tenant.this.external_id } }
     }]
   })
-
-  # Plerion only assumes roles with this tag.
-  tags = { RolePurpose = "PlerionAccess" }
 }
 
 resource "aws_iam_role_policy_attachment" "security_audit" {

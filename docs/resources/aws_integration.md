@@ -2,12 +2,12 @@
 page_title: "plerion_aws_integration Resource - plerion"
 subcategory: "AWS onboarding"
 description: |-
-  An AWS account connected to Plerion. Plerion assumes role_arn with the tenant's external id before it saves anything, so the role must exist and trust Plerion first. Plerion only assumes a role tagged RolePurpose = PlerionAccess.
+  An AWS account connected to Plerion. Plerion assumes role_arn with the tenant's external id before it saves anything, so the role must exist and trust Plerion first.
 ---
 
 # plerion_aws_integration (Resource)
 
-An AWS account connected to Plerion. Plerion assumes `role_arn` with the tenant's external id before it saves anything, so the role must exist and trust Plerion first. Plerion only assumes a role tagged `RolePurpose = PlerionAccess`.
+An AWS account connected to Plerion. Plerion assumes `role_arn` with the tenant's external id before it saves anything, so the role must exist and trust Plerion first.
 
 ## Example usage
 
@@ -30,9 +30,6 @@ resource "aws_iam_role" "plerion" {
       Condition = { StringEquals = { "sts:ExternalId" = data.plerion_tenant.this.external_id } }
     }]
   })
-
-  # Plerion only assumes roles with this tag.
-  tags = { RolePurpose = "PlerionAccess" }
 }
 
 resource "aws_iam_role_policy_attachment" "security_audit" {
@@ -65,7 +62,7 @@ AWS can take a minute or two before it lets Plerion assume a role created in the
 
 ### Required
 
-- `role_arn` (String) ARN of the IAM role Plerion assumes to read the account. The role must carry the tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the integration.
+- `role_arn` (String) ARN of the IAM role Plerion assumes to read the account. Pointing it at another AWS account replaces the integration.
 
 ### Optional
 

@@ -59,8 +59,7 @@ func (r *awsIntegrationResource) Metadata(_ context.Context, req resource.Metada
 func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "An AWS account connected to Plerion. Plerion assumes `role_arn` with " +
-			"the tenant's external id before it saves anything, so the role must exist and trust Plerion first. " +
-			"Plerion only assumes a role tagged `RolePurpose = PlerionAccess`.",
+			"the tenant's external id before it saves anything, so the role must exist and trust Plerion first.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Integration id.",
@@ -73,8 +72,8 @@ func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"role_arn": schema.StringAttribute{
-				MarkdownDescription: "ARN of the IAM role Plerion assumes to read the account. The role must " +
-					"carry the tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the integration.",
+				MarkdownDescription: "ARN of the IAM role Plerion assumes to read the account. " +
+					"Pointing it at another AWS account replaces the integration.",
 				Required:      true,
 				Validators:    []validator.String{stringvalidator.RegexMatches(roleARNPattern, "must be an IAM role ARN")},
 				PlanModifiers: []planmodifier.String{replaceIfAccountChanges()},
