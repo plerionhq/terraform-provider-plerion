@@ -67,10 +67,40 @@ type ServiceAccountRegion struct {
 	TemplateVersion  string `json:"templateVersion,omitempty"`
 }
 
+// The request bodies the API accepts. Like Plerion, which validates every body
+// with additionalProperties: false, decodeBody refuses a field not listed here.
+type awsIntegrationRequest struct {
+	RoleARN                     string `json:"roleArn"`
+	Name                        string `json:"name"`
+	EnvironmentID               string `json:"environmentId"`
+	InstanceProfileARN          string `json:"instanceProfileArn"`
+	CWPPKMSAccessMode           string `json:"cwppKMSAccessMode"`
+	ServiceAccountID            string `json:"serviceAccountId"`
+	ServiceAccountAccessRoleARN string `json:"serviceAccountAccessRoleArn"`
+	ServiceAccountType          string `json:"serviceAccountType"`
+}
+
+type serviceAccountRequest struct {
+	ControlPlaneRoleARN         string `json:"controlPlaneRoleArn"`
+	ApplianceInstanceProfileARN string `json:"applianceInstanceProfileArn"`
+	Name                        string `json:"name"`
+	TemplateVersion             string `json:"templateVersion"`
+}
+
+type serviceAccountRegionRequest struct {
+	VPCID            string `json:"vpcId"`
+	SubnetID         string `json:"subnetId"`
+	SecurityGroupID  string `json:"securityGroupId"`
+	QueueURL         string `json:"queueUrl"`
+	MaxInstanceLimit int64  `json:"maxInstanceLimit"`
+	TemplateVersion  string `json:"templateVersion"`
+}
+
 type awsState struct {
 	integrations       map[string]*AWSIntegration
 	integrationCreates int
 	deleting           map[string]bool
+	failDeletes        map[string]bool
 	serviceAccounts    map[string]*ServiceAccount
 	regions            map[string]*ServiceAccountRegion
 	notReadySeen       map[string]bool
@@ -80,6 +110,7 @@ func newAWSState() awsState {
 	return awsState{
 		integrations:    map[string]*AWSIntegration{},
 		deleting:        map[string]bool{},
+		failDeletes:     map[string]bool{},
 		serviceAccounts: map[string]*ServiceAccount{},
 		regions:         map[string]*ServiceAccountRegion{},
 		notReadySeen:    map[string]bool{},
@@ -92,6 +123,23 @@ func (s *Server) RenameAWSIntegration(id, name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.aws.integrations[id].Name = name
+}
+
+// SetAWSIntegrationEnvironment moves an integration to another environment as
+// if someone did it in the console.
+func (s *Server) SetAWSIntegrationEnvironment(id, environmentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.aws.integrations[id].EnvironmentID = environmentID
+}
+
+// FailAWSIntegrationDeletes makes Plerion's background deletion of an
+// integration fail, or succeed again when fail is false. A failed deletion
+// leaves the integration in place with status delete_failed, as in Plerion.
+func (s *Server) FailAWSIntegrationDeletes(id string, fail bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.aws.failDeletes[id] = fail
 }
 
 // DisableServiceAccountRegion turns a region off as if someone did it in the console.
@@ -187,7 +235,7 @@ func (s *Server) routeServiceAccounts(response http.ResponseWriter, request *htt
 }
 
 func (s *Server) createAWSIntegration(response http.ResponseWriter, request *http.Request) {
-	var input AWSIntegration
+	var input awsIntegrationRequest
 	if !decodeBody(response, request, &input) {
 		return
 	}
@@ -205,15 +253,21 @@ func (s *Server) createAWSIntegration(response http.ResponseWriter, request *htt
 	}
 
 	s.aws.integrationCreates++
-	integration := input
-	integration.IntegrationID = "int-" + accountID
-	integration.AccountID = accountID
-	integration.Status = statusFor(accountID)
+	integration := AWSIntegration{
+		IntegrationID:               "int-" + accountID,
+		AccountID:                   accountID,
+		Name:                        input.Name,
+		RoleARN:                     input.RoleARN,
+		EnvironmentID:               input.EnvironmentID,
+		InstanceProfileARN:          input.InstanceProfileARN,
+		CWPPKMSAccessMode:           input.CWPPKMSAccessMode,
+		ServiceAccountID:            input.ServiceAccountID,
+		ServiceAccountAccessRoleARN: input.ServiceAccountAccessRoleARN,
+		ServiceAccountType:          input.ServiceAccountType,
+		Status:                      statusFor(accountID),
+	}
 	if integration.Name == "" {
 		integration.Name = accountID
-	}
-	if integration.CWPPKMSAccessMode == "" {
-		integration.CWPPKMSAccessMode = "ALL_KEYS"
 	}
 	s.aws.integrations[integration.IntegrationID] = &integration
 	writeData(response, http.StatusCreated, integration)
@@ -248,11 +302,14 @@ func (s *Server) patchAWSIntegration(response http.ResponseWriter, request *http
 		return
 	}
 
-	// A null clears the setting.
+	// A null clears the setting, where the API allows one.
 	for key, value := range changes {
 		text := ""
 		if value != nil {
 			text = *value
+		} else if !clearableIntegrationFields[key] {
+			writeCodedError(response, http.StatusBadRequest, "BadRequest", key+" can't be null")
+			return
 		}
 		switch key {
 		case "roleArn":
@@ -284,17 +341,33 @@ func (s *Server) patchAWSIntegration(response http.ResponseWriter, request *http
 	writeData(response, http.StatusOK, integration)
 }
 
+// clearableIntegrationFields are the PATCH fields the API lets a null clear.
+var clearableIntegrationFields = map[string]bool{
+	"environmentId":               true,
+	"instanceProfileArn":          true,
+	"serviceAccountId":            true,
+	"serviceAccountAccessRoleArn": true,
+}
+
 func (s *Server) deleteAWSIntegration(response http.ResponseWriter, id string) {
-	if _, ok := s.aws.integrations[id]; !ok {
+	integration, ok := s.aws.integrations[id]
+	if !ok {
 		writeCodedError(response, http.StatusNotFound, "NotFound", "Integration not found")
 		return
 	}
-	s.aws.deleting[id] = true
-	writeData(response, http.StatusAccepted, map[string]string{"integrationId": id})
+	// Plerion removes the integration in the background. A removal that fails
+	// leaves it delete_failed, and the next DELETE starts it again.
+	if s.aws.failDeletes[id] {
+		integration.Status = "delete_failed"
+	} else {
+		integration.Status = "delete_in_progress"
+		s.aws.deleting[id] = true
+	}
+	writeData(response, http.StatusAccepted, map[string]string{"integrationId": id, "status": "delete_in_progress"})
 }
 
 func (s *Server) createServiceAccount(response http.ResponseWriter, request *http.Request) {
-	var input ServiceAccount
+	var input serviceAccountRequest
 	if !decodeBody(response, request, &input) {
 		return
 	}
@@ -308,9 +381,14 @@ func (s *Server) createServiceAccount(response http.ResponseWriter, request *htt
 		return
 	}
 
-	serviceAccount := input
-	serviceAccount.AccountID = accountID
-	serviceAccount.Status = statusFor(accountID)
+	serviceAccount := ServiceAccount{
+		AccountID:                   accountID,
+		Name:                        input.Name,
+		ControlPlaneRoleARN:         input.ControlPlaneRoleARN,
+		ApplianceInstanceProfileARN: input.ApplianceInstanceProfileARN,
+		TemplateVersion:             input.TemplateVersion,
+		Status:                      statusFor(accountID),
+	}
 	serviceAccount.Enabled = serviceAccount.Status == statusActive
 	serviceAccount.AWSOrganizationID = AWSOrganizationID
 	if serviceAccount.Name == "" {
@@ -335,11 +413,16 @@ func (s *Server) patchServiceAccount(response http.ResponseWriter, request *http
 		writeCodedError(response, http.StatusNotFound, "NotFound", "Service account not found")
 		return
 	}
-	var changes map[string]string
+	var changes map[string]*string
 	if !decodeBody(response, request, &changes) {
 		return
 	}
-	for key, value := range changes {
+	for key, pointer := range changes {
+		if pointer == nil {
+			writeCodedError(response, http.StatusBadRequest, "BadRequest", key+" can't be null")
+			return
+		}
+		value := *pointer
 		switch key {
 		case "controlPlaneRoleArn":
 			serviceAccount.ControlPlaneRoleARN = value
@@ -377,7 +460,7 @@ func (s *Server) putRegion(response http.ResponseWriter, request *http.Request, 
 			"Service account "+accountID+" is awaiting approval. Approve it in the Plerion console, then apply again.")
 		return
 	}
-	var input ServiceAccountRegion
+	var input serviceAccountRegionRequest
 	if !decodeBody(response, request, &input) {
 		return
 	}
@@ -388,8 +471,17 @@ func (s *Server) putRegion(response http.ResponseWriter, request *http.Request, 
 	// Like Plerion: a new region starts enabled, and a PUT keeps an existing
 	// region's enabled setting, and its template version unless it sends one.
 	key := accountID + "/" + region
-	saved := input
-	saved.AccountID, saved.Region, saved.Enabled = accountID, region, true
+	saved := ServiceAccountRegion{
+		AccountID:        accountID,
+		Region:           region,
+		VPCID:            input.VPCID,
+		SubnetID:         input.SubnetID,
+		SecurityGroupID:  input.SecurityGroupID,
+		QueueURL:         input.QueueURL,
+		MaxInstanceLimit: input.MaxInstanceLimit,
+		Enabled:          true,
+		TemplateVersion:  input.TemplateVersion,
+	}
 	if existing, ok := s.aws.regions[key]; ok {
 		saved.Enabled = existing.Enabled
 		if saved.TemplateVersion == "" {
@@ -444,7 +536,9 @@ func accountOf(arn string) string {
 }
 
 func decodeBody(response http.ResponseWriter, request *http.Request, out any) bool {
-	if err := json.NewDecoder(request.Body).Decode(out); err != nil {
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil {
 		writeCodedError(response, http.StatusBadRequest, "BadRequest", err.Error())
 		return false
 	}

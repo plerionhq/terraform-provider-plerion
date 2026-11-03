@@ -12,6 +12,8 @@ An AWS account you run Plerion's workload scanners in. Plerion assumes `control_
 ## Example usage
 
 ```terraform
+# The control-plane role must carry the tag RolePurpose = "PlerionAccess";
+# Plerion only assumes roles with it.
 resource "plerion_aws_service_account" "this" {
   control_plane_role_arn = aws_iam_role.plerion_control_plane.arn
   instance_profile_arn   = aws_iam_instance_profile.plerion_appliance.arn
@@ -36,7 +38,7 @@ AWS can take a minute or two before it lets Plerion assume a role created in the
 
 ### Required
 
-- `control_plane_role_arn` (String) Role Plerion assumes to launch and manage scanners. Pointing it at another AWS account replaces the service account.
+- `control_plane_role_arn` (String) Role Plerion assumes to launch and manage scanners. The role must carry the tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the service account.
 - `instance_profile_arn` (String) Instance profile the scanners run with. Must be in the same account as the role.
 
 ### Optional

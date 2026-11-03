@@ -2,12 +2,12 @@
 page_title: "plerion_aws_integration Resource - plerion"
 subcategory: "AWS onboarding"
 description: |-
-  An AWS account connected to Plerion. Plerion assumes role_arn with the tenant's external id before it saves anything, so the role must exist and trust Plerion first.
+  An AWS account connected to Plerion. Plerion assumes role_arn with the tenant's external id before it saves anything, so the role must exist and trust Plerion first. Plerion only assumes a role tagged RolePurpose = PlerionAccess.
 ---
 
 # plerion_aws_integration (Resource)
 
-An AWS account connected to Plerion. Plerion assumes `role_arn` with the tenant's external id before it saves anything, so the role must exist and trust Plerion first.
+An AWS account connected to Plerion. Plerion assumes `role_arn` with the tenant's external id before it saves anything, so the role must exist and trust Plerion first. Plerion only assumes a role tagged `RolePurpose = PlerionAccess`.
 
 ## Example usage
 
@@ -30,6 +30,9 @@ resource "aws_iam_role" "plerion" {
       Condition = { StringEquals = { "sts:ExternalId" = data.plerion_tenant.this.external_id } }
     }]
   })
+
+  # Plerion only assumes roles with this tag.
+  tags = { RolePurpose = "PlerionAccess" }
 }
 
 resource "aws_iam_role_policy_attachment" "security_audit" {
@@ -62,11 +65,11 @@ AWS can take a minute or two before it lets Plerion assume a role created in the
 
 ### Required
 
-- `role_arn` (String) ARN of the IAM role Plerion assumes to read the account. Pointing it at another AWS account replaces the integration.
+- `role_arn` (String) ARN of the IAM role Plerion assumes to read the account. The role must carry the tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the integration.
 
 ### Optional
 
-- `environment_id` (String) Plerion environment to put the account in.
+- `environment_id` (String) Plerion environment to put the account in. Left out, the integration keeps the environment it has, including one chosen in the Plerion console.
 - `instance_profile_arn` (String) Instance profile for workload scanning in the same account. Must be in the same account as `role_arn`, with no IAM path and only letters, digits, `-` and `_` in its name.
 - `kms_key_access_mode` (String) Which KMS keys workload scanning may use: `ALL_KEYS` or `SELECTED_KEYS`.
 - `name` (String) Display name. Defaults to the account alias, or the account id when it has none.

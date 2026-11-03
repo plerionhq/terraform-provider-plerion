@@ -67,8 +67,8 @@ func (r *awsServiceAccountResource) Schema(_ context.Context, _ resource.SchemaR
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"control_plane_role_arn": schema.StringAttribute{
-				MarkdownDescription: "Role Plerion assumes to launch and manage scanners. Pointing it at another " +
-					"AWS account replaces the service account.",
+				MarkdownDescription: "Role Plerion assumes to launch and manage scanners. The role must carry the " +
+					"tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the service account.",
 				Required: true,
 				Validators: []validator.String{stringvalidator.RegexMatches(serviceAccountRoleARNPattern,
 					"must be an IAM role ARN with no path, and a name of letters, digits, - and _")},

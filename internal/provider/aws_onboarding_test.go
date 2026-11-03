@@ -81,7 +81,7 @@ func TestAWSIntegrationLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(address, "account_id", "111111111111"),
 					resource.TestCheckResourceAttr(address, "name", "prod"),
 					resource.TestCheckResourceAttr(address, "status", "active"),
-					resource.TestCheckResourceAttr(address, "kms_key_access_mode", "ALL_KEYS"),
+					resource.TestCheckNoResourceAttr(address, "kms_key_access_mode"),
 					resource.TestCheckNoResourceAttr(address, "environment_id"),
 				),
 			},
@@ -109,14 +109,15 @@ func TestAWSIntegrationLifecycle(t *testing.T) {
 				),
 			},
 			{
-				// Removing an optional setting clears it in Plerion, and a
-				// rename in the console is drift that apply puts back.
+				// Removing instance_profile_arn clears it in Plerion, and a
+				// rename in the console is drift that apply puts back. Removing
+				// environment_id keeps the environment.
 				PreConfig: func() { server.RenameAWSIntegration("int-111111111111", "renamed-in-console") },
 				Config: integrationConfig(server, firstRole, `
   name                = "prod-renamed"
   kms_key_access_mode = "SELECTED_KEYS"`),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckNoResourceAttr(address, "environment_id"),
+					resource.TestCheckResourceAttr(address, "environment_id", "env-1"),
 					resource.TestCheckNoResourceAttr(address, "instance_profile_arn"),
 					resource.TestCheckResourceAttr(address, "name", "prod-renamed"),
 				),
@@ -132,6 +133,54 @@ func TestAWSIntegrationLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(address, "name", "333333333333"),
 					checkAWSCounts(server, 1, 2, 0, 0),
 				),
+			},
+		},
+	})
+}
+
+// The templates don't set environment_id, so an environment chosen in the
+// console, or kept through terraform import, must not be undone by an apply.
+func TestAWSIntegrationKeepsTheConsoleEnvironment(t *testing.T) {
+	server := newTestServer(t)
+	const address = "plerion_aws_integration.test"
+	config := integrationConfig(server, "arn:aws:iam::111111111111:role/PlerionRole", "")
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: config},
+			{
+				PreConfig: func() { server.SetAWSIntegrationEnvironment("int-111111111111", "env-console") },
+				Config:    config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.TestCheckResourceAttr(address, "environment_id", "env-console"),
+			},
+		},
+	})
+}
+
+// A removal that fails in Plerion keeps answering with the integration, so
+// destroy reports it at once instead of waiting out its timeout.
+func TestAWSIntegrationDestroyReportsAFailedRemoval(t *testing.T) {
+	server := newTestServer(t)
+	const id = "int-111111111111"
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		CheckDestroy:             checkAWSCounts(server, 0, -1, 0, 0),
+		Steps: []resource.TestStep{
+			{Config: integrationConfig(server, "arn:aws:iam::111111111111:role/PlerionRole", "")},
+			{
+				PreConfig:   func() { server.FailAWSIntegrationDeletes(id, true) },
+				Config:      providerConfig(server),
+				ExpectError: regexp.MustCompile(`removal of integration int-111111111111 failed`),
+			},
+			{
+				// Destroying again starts the removal again.
+				PreConfig: func() { server.FailAWSIntegrationDeletes(id, false) },
+				Config:    providerConfig(server),
 			},
 		},
 	})

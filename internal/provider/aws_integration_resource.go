@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
@@ -57,7 +59,8 @@ func (r *awsIntegrationResource) Metadata(_ context.Context, req resource.Metada
 func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "An AWS account connected to Plerion. Plerion assumes `role_arn` with " +
-			"the tenant's external id before it saves anything, so the role must exist and trust Plerion first.",
+			"the tenant's external id before it saves anything, so the role must exist and trust Plerion first. " +
+			"Plerion only assumes a role tagged `RolePurpose = PlerionAccess`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Integration id.",
@@ -70,8 +73,8 @@ func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"role_arn": schema.StringAttribute{
-				MarkdownDescription: "ARN of the IAM role Plerion assumes to read the account. " +
-					"Pointing it at another AWS account replaces the integration.",
+				MarkdownDescription: "ARN of the IAM role Plerion assumes to read the account. The role must " +
+					"carry the tag `RolePurpose = PlerionAccess`. Pointing it at another AWS account replaces the integration.",
 				Required:      true,
 				Validators:    []validator.String{stringvalidator.RegexMatches(roleARNPattern, "must be an IAM role ARN")},
 				PlanModifiers: []planmodifier.String{replaceIfAccountChanges()},
@@ -84,8 +87,11 @@ func (r *awsIntegrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"environment_id": schema.StringAttribute{
-				MarkdownDescription: "Plerion environment to put the account in.",
-				Optional:            true,
+				MarkdownDescription: "Plerion environment to put the account in. Left out, the integration keeps " +
+					"the environment it has, including one chosen in the Plerion console.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"instance_profile_arn": schema.StringAttribute{
 				MarkdownDescription: "Instance profile for workload scanning in the same account. Must be in the same account as `role_arn`, " +
@@ -256,9 +262,18 @@ func (r *awsIntegrationResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	err = waitUntilGone(ctx, integrationDeleteTimeout, func(ctx context.Context) error {
-		_, err := r.client.GetAWSIntegration(ctx, id)
+		integration, err := r.client.GetAWSIntegration(ctx, id)
+		if err == nil && integration.Status == statusDeleteFailed {
+			return errDeleteFailed
+		}
 		return err
 	})
+	if errors.Is(err, errDeleteFailed) {
+		resp.Diagnostics.AddError("Plerion could not remove the AWS integration",
+			fmt.Sprintf("Plerion's removal of integration %s failed. Run terraform destroy again to retry, "+
+				"or check the integration in the Plerion console.", id))
+		return
+	}
 	if err != nil {
 		addAPIErrorWithRole(&resp.Diagnostics, "confirm the AWS integration was removed", roleForIntegrations, err)
 	}

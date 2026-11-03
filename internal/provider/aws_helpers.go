@@ -28,8 +28,13 @@ const (
 	roleAssumeTimeout = 2 * time.Minute
 
 	statusPendingApproval = "pending_approval"
+	statusDeleteFailed    = "delete_failed"
 	codeRoleNotAssumable  = "RoleNotAssumable"
 )
+
+// errDeleteFailed stops waitUntilGone when Plerion reports that its removal
+// failed. The record then stays in place, so waiting longer changes nothing.
+var errDeleteFailed = errors.New("removal failed in Plerion")
 
 var (
 	roleARNPattern = regexp.MustCompile(`^arn:aws:iam::\d{12}:role/[\w+=,.@/-]+$`)
