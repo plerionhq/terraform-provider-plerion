@@ -19,6 +19,8 @@ var testProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 
 func init() {
 	dryRunPollInterval = 10 * time.Millisecond
+	pollInterval = 10 * time.Millisecond
+	roleRetryInterval = 10 * time.Millisecond
 }
 
 // newTestServer starts a fake API and clears the provider's environment

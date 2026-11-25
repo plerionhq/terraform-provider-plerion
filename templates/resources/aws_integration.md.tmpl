@@ -1,0 +1,36 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: "AWS onboarding"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example usage
+
+{{ tffile "examples/resources/plerion_aws_integration/resource.tf" }}
+
+## Approval
+
+Plerion holds an account from an AWS organization your tenant hasn't connected before until someone approves it in the Plerion console. `terraform apply` doesn't wait for that: the integration is created with `status = "pending_approval"` and Terraform prints a warning. Plerion doesn't scan the account until it is approved.
+
+## New IAM roles
+
+AWS can take a minute or two before it lets Plerion assume a role created in the same apply. The provider retries for up to two minutes.
+
+## Deleting
+
+`terraform destroy` removes the integration from Plerion. Plerion finishes the removal in the background, and the provider waits until it is gone.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import an integration by its ID, shown in the Plerion console. An account that is already connected to Plerion has to be imported before Terraform can manage it.
+
+{{ codefile "shell" "examples/resources/plerion_aws_integration/import.sh" }}
+
+An integration connected with a Plerion CloudFormation stack can be imported, but its stack still owns the role, workload scanning and KMS key access. Terraform can change its `name` and `environment_id`; anything else is refused until you update or delete the stack.

@@ -1,6 +1,6 @@
 # terraform-provider-plerion
 
-Terraform provider (`plerionhq/plerion`) for the Plerion customer API. It manages custom checks as code: the `plerion_custom_check` resource, lookup and list data sources, and a dry-run data source that previews findings during a plan. It calls only the public `/v1/tenant/custom-checks` and `/v1/tenant/custom-check-dry-runs` routes.
+Terraform provider (`plerionhq/plerion`) for the Plerion customer API. It manages custom checks as code: the `plerion_custom_check` resource, lookup and list data sources, and a dry-run data source that previews findings during a plan. It also connects AWS accounts: the `plerion_aws_integration`, `plerion_aws_service_account` and `plerion_aws_service_account_region` resources and the `plerion_tenant` data source. It calls only public `/v1/tenant/*` routes.
 
 ## Debugging and gotchas
 
@@ -15,6 +15,9 @@ Terraform provider (`plerionhq/plerion`) for the Plerion customer API. It manage
 - **The HTTP client's timeout reports `context.DeadlineExceeded`.** `shouldRetry` and the dry-run timeout message check the caller's context instead, or a slow response looks like the caller giving up.
 - **Releases need an approval.** The signing key is a secret of the `release` environment, which only `v*` tags can use and which waits for a reviewer before the job runs. Don't move the key back to a repository secret: every workflow on every branch could read it.
 - **`internal/fakeapi` mirrors the real API.** When the API changes behavior, change the fake in the same pull request, or the provider tests keep passing against behavior that no longer exists.
+- **The tenant and AWS onboarding routes wrap their answer in `data`; the custom check routes don't.** Their client methods use `doData`, which unwraps it.
+- **A region PUT never sends `enabled`.** Plerion keeps the stored value, and a new region starts on. Turning a region on and off stays in the console.
+- **A new IAM role can't be assumed straight away.** The routes answer 422 `RoleNotAssumable` until AWS lets Plerion assume it, and `retryWhileRoleNotAssumable` retries for up to two minutes. A role named `not-ready*` fails once in the fake.
 
 ## Docs
 
